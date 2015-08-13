@@ -17,6 +17,10 @@
 /// Main point of interaction with the SDK. Created by the SDK as the result of an ad request.
 @property(nonatomic, strong) IMAAdsManager *adsManager;
 
+@property (nonatomic, assign) NSInteger adCount;
+@property (nonatomic, strong) NSArray *ads;
+@property (nonatomic, strong) IMAAdDisplayContainer *container;
+
 @end
 
 @implementation ViewController
@@ -31,10 +35,19 @@ NSString *const kTestAppAdTagUrl =
     @"gdfp_req=1&env=vp&output=xml_vast3&unviewed_position_start=1&"
     @"url=[referrer_url]&correlator=[timestamp]";
 
+NSString *const kTestAppAdTagUrl2 = @"http://pubads.g.doubleclick.net/gampad/ads?sz=400x300&"
+@"iu=%2F6062%2Fhanna_MA_group%2Fvideo_comp_app&ciu_szs=&impl=s&gdfp_req=1&env=vp&"
+@"output=xml_vast2&unviewed_position_start=1&m_ast=vast&url=[referrer_url]&";
+
 - (void)viewDidLoad {
   [super viewDidLoad];
 
   self.playButton.layer.zPosition = MAXFLOAT;
+    self.adCount = 0;
+    self.ads = @[
+                 kTestAppAdTagUrl2,
+                 kTestAppAdTagUrl
+                  ];
 
   [self setupAdsLoader];
   [self setUpContentPlayer];
@@ -58,6 +71,9 @@ NSString *const kTestAppAdTagUrl =
   // Size, position, and display the AVPlayer.
   playerLayer.frame = self.videoView.layer.bounds;
   [self.videoView.layer addSublayer:playerLayer];
+
+    IMAAdDisplayContainer *adDisplayContainer = [[IMAAdDisplayContainer alloc] initWithAdContainer:self.videoView companionSlots:nil];
+    self.container = adDisplayContainer;
 }
 
 #pragma mark SDK Setup
@@ -68,14 +84,20 @@ NSString *const kTestAppAdTagUrl =
 }
 
 - (void)requestAds {
-  // Create an ad display container for ad rendering.
-  IMAAdDisplayContainer *adDisplayContainer =
-      [[IMAAdDisplayContainer alloc] initWithAdContainer:self.videoView companionSlots:nil];
-  // Create an ad request with our ad tag, display container, and optional user context.
-  IMAAdsRequest *request = [[IMAAdsRequest alloc] initWithAdTagUrl:kTestAppAdTagUrl
-                                                adDisplayContainer:adDisplayContainer
-                                                       userContext:nil];
-  [self.adsLoader requestAdsWithRequest:request];
+
+    if (self.adCount < 2)
+    {
+        NSString *adURL = self.ads[self.adCount];
+        // Create an ad display container for ad rendering.
+
+        // Create an ad request with our ad tag, display container, and optional user context.
+        IMAAdsRequest *request = [[IMAAdsRequest alloc] initWithAdTagUrl:adURL
+                                                      adDisplayContainer:self.container
+                                                             userContext:nil];
+        [self.adsLoader requestAdsWithRequest:request];
+
+        self.adCount = self.adCount + 1;
+    }
 }
 
 - (void)createContentPlayhead {
@@ -122,6 +144,14 @@ NSString *const kTestAppAdTagUrl =
   if (event.type == kIMAAdEvent_LOADED) {
     [adsManager start];
   }
+    else if (event.type == kIMAAdEvent_COMPLETE)
+    {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(10 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+
+            [self requestAds];
+            
+        });
+    }
 }
 
 - (void)adsManager:(IMAAdsManager *)adsManager didReceiveAdError:(IMAAdError *)error {
